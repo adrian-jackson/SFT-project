@@ -8,11 +8,15 @@
 % need to be able to make signals with N = length,k = number of peaks, 
 % p = spacing of peaks, epsilon[j] = noise function
 
-A = 1; % peak magnitude
 K = 3; % amount of peaks
+A = 1;
+% use the folloing 3 lines for gaussian-like magnitudes
+%Amax = K; % peak magnitude for central sample
+%x = 1:K;
+%A = K/Amax + (Amax - K/Amax) * (1 - abs(x - (K+1)/2)/((K+1)/2-1));
 k0 = 400; % center frequency index
 N = 1024; % signal length
-delta_w = 1; % peak spacing, (0 to 1]. approach 0 for closer spacing
+delta_w = 0.6; % peak spacing, (0 to 1]. approach 0 for closer spacing
 n  = 0:N-1; % time indices
 
 k_list = (1:N/K:N) + ((k0-512) + N/(2*K));
@@ -37,7 +41,7 @@ grid off;
 
 % Create time signal
 S = exp(2*pi*1i * (k_list(:) * n) / N);
-f = A * sum(S, 1);    % 1-by-N signal
+f = sum(S, 1);    % 1-by-N signal
 
 %% Implement SFT I. Identify Frequency Peaks
 
@@ -48,7 +52,7 @@ f = A * sum(S, 1);    % 1-by-N signal
 % Aliasing and CRT
 % calculate padded signal of length with specific coprime factors.
 % subsampling rates MUST be > k but << N
-subsampling_rates = [5,7,8]; 
+subsampling_rates = [7,8,11]; 
 subsampling_length = lcm(lcm(subsampling_rates(1),subsampling_rates(2)), subsampling_rates(3));
 padded_N = subsampling_length * round((N / subsampling_length) + 1);
 f_padded = [f, zeros(1, padded_N - N)];
@@ -57,6 +61,11 @@ f_padded = [f, zeros(1, padded_N - N)];
 f_1 = fft(f(1:subsampling_rates(1):end));
 f_2 = fft(f(1:subsampling_rates(2):end));
 f_3 = fft(f(1:subsampling_rates(3):end));
+
+% debug
+[B_1, ~] = sort(abs(f_1), 'descend');
+[B_2, ~] = sort(abs(f_2), 'descend');
+[B_3, ~] = sort(abs(f_3), 'descend');
 
 %threshold for noise robustness
 thresh1 = 0.5 * max(abs(f_1));
@@ -72,6 +81,10 @@ assert(length(peaks1) == length(peaks2) && length(peaks2) == length(peaks3), ...
     ['Peaks from each subsampled signal must have the same length. Try ' ...
     'tuning subsampling rates']);
 
-for i = 1:length(peaks1)
-    x = CRT()
+x = crt([peaks1(1), peaks2(j), peaks3(l)],subsampling_rates);
+
+for j = 1:K:1
+    for l = 1:K:1
+        x = crt([peaks1(1), peaks2(j), peaks3(l)],subsampling_rates);
+    end
 end
