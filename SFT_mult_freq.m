@@ -14,7 +14,7 @@ A = 1;
 %Amax = K; % peak magnitude for central sample
 %x = 1:K;
 %A = K/Amax + (Amax - K/Amax) * (1 - abs(x - (K+1)/2)/((K+1)/2-1));
-k0 = 59; % center frequency index
+k0 = 59; % center frequency index, 1-index
 N = 70; % signal length
 delta_w = 0.6; % peak spacing, (0 to 1]. approach 0 for closer spacing
 n  = 0:N-1; % time indices
@@ -52,12 +52,15 @@ end
 a = randi([0, N-1]);
 b = randi([0, N-1]);
 idx = mod(sigma*n + b, N) + 1;
+idx_no_tshift = mod(sigma*n, N) + 1;
 f_sigma = f(idx);
+f_notshift = f(idx_no_tshift);
 f_perm = f_sigma .* exp(-1j*2*pi*a*n/N);
 
 %calculate sigma inverse mod N for unpermute
 [~, x_temp, ~] = gcd(sigma, N);
 sigma_inv = mod(x_temp,N);
+
 %% Implement SFT I. Identify Frequency Peaks
 
 % Use random binning with modulo aliasing and CRT
@@ -90,8 +93,8 @@ peaks1 = find(abs(f_1) > thresh1);
 peaks2 = find(abs(f_2) > thresh2);
 peaks3 = find(abs(f_3) > thresh3);
 
-x = crt([peaks1(1)-1, peaks2(1)-1, peaks3(1)-1],subsampling_lengths); 
-%convert from 1- to 0- index for CRT above
+k_perm = crt([peaks1(1)-1, peaks2(1)-1, peaks3(1)-1],subsampling_lengths); 
+%convert from 1- to 0- index for CRT above, then back to 1-index
 
-k_orig = mod(sigma * (x + a), N); %unpermute recovered index
+k_orig = mod((k_perm+a)*sigma_inv, N);
 disp(k_orig)
