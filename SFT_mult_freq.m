@@ -33,6 +33,7 @@ fprintf("setting peaks at %d\n", k_list)
 %plot freq peaks
 indices = 1:length(k);
 nonzero_idx = k ~= 0;
+figure;
 stem(indices(nonzero_idx), k(nonzero_idx), 'o');
 % use following two lines for x ticks for only peaks
 %ax = gca; 
@@ -51,6 +52,38 @@ f_k_hat = zeros(1,N); %assume we are taking an N-pt DFT of f_n
 
 %sampling for fourier coeff estimation
 L = floor(sampling_rate * N);
+
+%% Create filter
+a = 0.5; %transition band width
+B = K*2; %number of freq bins
+m_pass = floor((1-a)*N / (2*B)); %passband width 
+m_stop = floor(N/(2*B));
+k_passband = m_pass+2:m_stop+1; %freq index variable, same length as signal for an N-pt SFT
+gamma = 1; %smoothness of gaussian taper 
+G_k_passband =  exp(-1 * (abs(k_passband) - m_pass).^2 ./ (2*gamma^2));
+G_k = zeros(1,N);
+G_k(m_pass+2:m_stop+1) = G_k_passband;
+G_k(1:m_pass+1) = 1;
+g_n = ifft(G_k);
+
+%plot freq response (gaussian)
+figure;
+stem(abs(G_k))
+xlabel('k');
+ylabel('Magnitude');
+title('Frequency Filter');
+grid off;
+
+%plot time response
+figure;
+stem(abs(g_n))
+xlabel('n');
+ylabel('Magnitude');
+title('Time Filter');
+grid off;
+
+%downsample filter appropriately
+g_prime_n = g_n(1:floor(N/B):B)
 
 %% Main loop: randomly permute, find recovered frequencies, then peel
 while true
@@ -101,7 +134,8 @@ while true
     peaks2 = find(abs(f_2) > thresh2);
     peaks3 = find(abs(f_3) > thresh3);
 
-    if isempty(peaks1) && isempty(peaks2) && isempty(peaks3)
+    if isempty(peaks1) || isempty(peaks2) || isempty(peaks3)
+        disp("no peaks found")
         break
     end
 
@@ -123,7 +157,7 @@ while true
     fprintf('recovered peaks at %d with magnitude %d\n', k_hat, abs(A_hat))
 
     %peel
-    disp('peeling')
+    disp('peeling...')
 
     %debug:     peel_contrib = max(fft(A_hat .* exp(-2j*pi*n*k_hat/N)));
     f_n = f_n + A_hat .* exp(-2j*pi*n*k_hat/N);
