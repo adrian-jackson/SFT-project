@@ -55,7 +55,7 @@ L = floor(sampling_rate * N);
 
 %% Create filter
 a = 0.5; %transition band width
-B = K*2; %number of freq bins
+B = K*4; %number of freq bins
 m_pass = floor((1-a)*N / (2*B)); %passband width 
 m_stop = floor(N/(2*B));
 k_passband = m_pass+2:m_stop+1; %freq index variable, same length as signal for an N-pt SFT
@@ -83,7 +83,15 @@ title('Time Filter');
 grid off;
 
 %downsample filter appropriately
-g_prime_n = g_n(1:floor(N/B):B)
+g_prime_n = g_n(0:floor(N/B):B-1);
+
+%plot downsampled time response
+figure;
+stem(abs(g_prime_n))
+xlabel('n');
+ylabel('Magnitude');
+title('Downsampled Time Filter');
+grid off;
 
 %% Main loop: randomly permute, find recovered frequencies, then peel
 while true
