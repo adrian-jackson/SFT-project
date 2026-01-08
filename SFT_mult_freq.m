@@ -14,8 +14,8 @@ A = 10; % amplitude of peaks
 %Amax = K; % peak magnitude for central sample
 %x = 1:K;
 %A = K/Amax + (Amax - K/Amax) * (1 - abs(x - (K+1)/2)/((K+1)/2-1));
-k0 = 35; % center frequency index, 1-index
-N = 70; % signal length. MUST BE EVEN
+k0 = 1000; % center frequency index, 1-index
+N = 2145; % signal length. MUST BE EVEN
 delta_w = 0.7; % peak spacing, (0 to 1]. approach 0 for closer spacing
 sampling_rate = 0.25; %amount of samples to use for fourier coeff estimation, (0,1]. Higher value is more accuracy but slower
 
@@ -33,6 +33,7 @@ fprintf("setting peaks at %d\n", k_list)
 %plot freq peaks
 indices = 1:length(k);
 nonzero_idx = k ~= 0;
+
 figure;
 stem(indices(nonzero_idx), k(nonzero_idx), 'o');
 % use following two lines for x ticks for only peaks
@@ -54,32 +55,34 @@ f_k_hat = zeros(1,N); %assume we are taking an N-pt DFT of f_n
 L = floor(sampling_rate * N);
 
 %% Create filter
-a = 0.5; %transition band width
-B = K*4; %number of freq bins
-m_pass = floor((1-a)*N / (2*B)); %passband width 
+alpha = 0.1; %transition band width
+B = 4 * K; %2^ nextpow2(256 * K); %number of freq bins
+m_pass = floor((1-alpha)*N / (2*B)); %passband width 
 m_stop = floor(N/(2*B));
-k_passband = m_pass+2:m_stop+1; %freq index variable, same length as signal for an N-pt SFT
-gamma = 1; %smoothness of gaussian taper 
-G_k_passband =  exp(-1 * (abs(k_passband) - m_pass).^2 ./ (2*gamma^2));
+k_trans = m_pass+2:m_stop+1; %freq index variable, same length as signal for an N-pt SFT
+gamma = 1e-3; %smoothness of gaussian taper 
+G_k_trans =  exp(-1 * (k_trans - m_pass).^2 ./ (2*gamma^2));
 G_k = zeros(1,N);
-G_k(m_pass+2:m_stop+1) = G_k_passband;
-G_k(1:m_pass+1) = 1;
+G_k(k_trans) = G_k_trans; %trans band
+G_k(end-length(k_trans)-m_pass:end-m_pass-1) = flipud (G_k_trans(:)); %trans band negative
+G_k(1:m_pass+1) = 1; %passband
+G_k(end-m_pass+1:end) = 1; %passband negative
 g_n = ifft(G_k);
 
-%plot freq response (gaussian)
-figure;
-stem(abs(G_k))
-xlabel('k');
-ylabel('Magnitude');
-title('Frequency Filter');
-grid off;
-
-%plot time response
+%plot filter time response
 figure;
 stem(abs(g_n))
 xlabel('n');
 ylabel('Magnitude');
 title('Time Filter');
+grid off;
+
+%plot filter time response
+figure;
+stem(abs(G_k))
+xlabel('k');
+ylabel('Magnitude');
+title('Frequency Filter');
 grid off;
 
 %downsample filter appropriately
@@ -88,12 +91,12 @@ g_prime_n(1:floor(N/B):N) = g_n(1:floor(N/B):N);
 filter_nonzero = 1:floor(N/B):N;
 
 %plot downsampled time response
-figure;
-stem(abs(g_prime_n))
-xlabel('n');
-ylabel('Magnitude');
-title('Downsampled Time Filter');
-grid off;
+%figure;
+%stem(abs(g_prime_n))
+%xlabel('n');
+%ylabel('Magnitude');
+%title('Downsampled Time Filter');
+%grid off;
 
 k_count = 0;
 
@@ -113,23 +116,24 @@ while true
     f_sigma = f_n(idx);
     f_notshift = f_n(idx_no_tshift);
     f_perm = f_sigma .* exp(-1j*2*pi*a*n/N);
+    f_perm = f_n; %DEBUG
 
     %calculate sigma inverse mod N for unpermute
     [~, x_temp, ~] = gcd(sigma, N);
     sigma_inv = mod(x_temp,N);
 
-    f_filt = f_perm;
-    f_filt(filter_nonzero) = f_perm(filter_nonzero) .* g_prime_n(filter_nonzero);
+    f_filt = f_perm .* g_n; %full filter mult
+    %f_filt(filter_nonzero) = f_perm(filter_nonzero) .* g_prime_n(filter_nonzero);
     
     %plot filtered frequency response
     figure;
     stem(abs(fft(f_filt)))
     xlabel('k');
     ylabel('Magnitude');
-    title('Downsampled Time Filter');
+    title('Filtered Frequency Signal');
     grid off;
 
-    %% Implement SFT I. Identify Frequency Peaks
+     %% Implement SFT I. Identify Frequency Peaks
 
     % Use random binning with modulo aliasing and CRT
 
@@ -138,7 +142,7 @@ while true
     % Aliasing and CRT
     % calculate padded signal of length with specific coprime factors.
     % subsampling rates MUST be > k but << N
-    subsampling_lengths = [2,5,7]; 
+    subsampling_lengths = [11,13,15]; 
     subsampling_rates = [N/subsampling_lengths(1), N/subsampling_lengths(2), N/subsampling_lengths(3)];
 
     % find subsampled DFTs
