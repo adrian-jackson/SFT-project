@@ -8,9 +8,9 @@
 % need to be able to make signals with N = length,k = number of peaks, 
 % p = spacing of peaks, epsilon[j] = noise function
 
-K = 1; % amount of peaks
-A = 1; % amplitude of peaks
-% use the folloing 3 lines for gaussian-like magnitudes
+K = 2; % amount of peaks
+A = 10; % amplitude of peaks
+% use the following 3 lines for gaussian-like magnitudes
 %Amax = K; % peak magnitude for central sample
 %x = 1:K;
 %A = K/Amax + (Amax - K/Amax) * (1 - abs(x - (K+1)/2)/((K+1)/2-1));
@@ -45,7 +45,7 @@ title('Sparse Frequency Peaks');
 grid off;
 
 % Create time signal
-S = exp(2*pi*1i * (k_list(:) * n) / N);
+S = A .* exp(2j * pi * (k_list(:) * n) / N);
 f_n = sum(S, 1);    % 1-by-N signal
 f_orig = f_n;
 f_k_hat = zeros(1,N); %assume we are taking an N-pt DFT of f_n
@@ -83,7 +83,9 @@ title('Time Filter');
 grid off;
 
 %downsample filter appropriately
-g_prime_n = g_n(0:floor(N/B):B-1);
+g_prime_n = zeros(1,N);
+g_prime_n(1:floor(N/B):N) = g_n(1:floor(N/B):N);
+filter_nonzero = 1:floor(N/B):N;
 
 %plot downsampled time response
 figure;
@@ -93,8 +95,14 @@ ylabel('Magnitude');
 title('Downsampled Time Filter');
 grid off;
 
+k_count = 0;
+
 %% Main loop: randomly permute, find recovered frequencies, then peel
 while true
+    if k_count >= K
+        fprintf('Found K=%d peaks, terminating\n', K)
+        break
+    end
     %% Permute signal
     n = 0:N-1;
     sigma = randi([1, floor((N-1)/2)]) * 2 - 1; %sigma can be any odd value [1,N-1]
@@ -110,6 +118,17 @@ while true
     [~, x_temp, ~] = gcd(sigma, N);
     sigma_inv = mod(x_temp,N);
 
+    f_filt = f_perm;
+    f_filt(filter_nonzero) = f_perm(filter_nonzero) .* g_prime_n(filter_nonzero);
+    
+    %plot filtered frequency response
+    figure;
+    stem(abs(fft(f_filt)))
+    xlabel('k');
+    ylabel('Magnitude');
+    title('Downsampled Time Filter');
+    grid off;
+
     %% Implement SFT I. Identify Frequency Peaks
 
     % Use random binning with modulo aliasing and CRT
@@ -123,9 +142,9 @@ while true
     subsampling_rates = [N/subsampling_lengths(1), N/subsampling_lengths(2), N/subsampling_lengths(3)];
 
     % find subsampled DFTs
-    f_1 = fft(f_perm(1:subsampling_rates(1):end));
-    f_2 = fft(f_perm(1:subsampling_rates(2):end));
-    f_3 = fft(f_perm(1:subsampling_rates(3):end));
+    f_1 = fft(f_filt(1:subsampling_rates(1):end));
+    f_2 = fft(f_filt(1:subsampling_rates(2):end));
+    f_3 = fft(f_filt(1:subsampling_rates(3):end));
 
     % debug
     [B_1, ~] = sort(abs(f_1), 'descend');
@@ -155,12 +174,16 @@ while true
     %fourier coefficient estimation
     samp_idxs = randi([1 N], 1, L);
     f_samp = f_n(samp_idxs);
-    A_hat = 1/L * sum(f_samp.*exp(-2j*pi*k_hat*samp_idxs/N));
+    A_hat = 1/L * sum(f_samp.*exp(-2j*pi*k_hat*(samp_idxs-1)/N));
     if max(f_k_hat) ~= 0 && abs(A_hat) < 0.1 * abs(max(f_k_hat))
         disp("peaks below threshold magnitude")
         break
     end
 
+    %if A_hat < 0.1 * A * 0.05 
+    %    fprintf('faulty peak recovery at %d, terminating\n', k_hat)
+    %    break
+    %end
     f_k_hat(k_hat) = A_hat;
     fprintf('recovered peaks at %d with magnitude %d\n', k_hat, abs(A_hat))
 
@@ -168,9 +191,10 @@ while true
     disp('peeling...')
 
     %debug:     peel_contrib = max(fft(A_hat .* exp(-2j*pi*n*k_hat/N)));
-    f_n = f_n + A_hat .* exp(-2j*pi*n*k_hat/N);
+    f_n = f_n - A_hat .* exp(-2j*pi*n*k_hat/N);
 
     tempval = 'debug';
+    k_count = k_count + 1;
 end
 
 disp('done.')
